@@ -1,0 +1,75 @@
+install.packages("tidyverse")
+library('tm')
+library('stringr')
+library('topicmodels')
+library('stm')
+library('igraph')
+library('ggplot2')
+library('dplyr')
+library('tidyr')
+library('data.table')
+library('tidyverse')
+
+mydata <- read_csv(file="C:/R_TopicModeling/CN_RR.csv")
+mydata
+
+
+#모든 전처리 한방에
+mypreprocess <- textProcessor(mydata$content_hann, metadata = mydata
+                              , removepunctuation = TRUE
+                              , removestopwords = FALSE
+                              , removenumbers = TRUE 
+                              , stem = FALSE
+                              , wordLengths = c(2,Inf)) 
+
+mypreprocess$vocab
+
+#DTM
+myout <-prepDocuments(mypreprocess$documents,
+                      mypreprocess$vocab, mypreprocess$meta,
+                      lower.thresh = 8)
+
+myout$vocab
+
+kno = 12
+#STMsdafsd
+mystm <- stm(myout$documents, myout$vocab, K=kno,
+             prevalence =~ year+ mPass, 
+             data=myout$meta,
+             seed = 16, init.type = "Spectral") 
+
+#LABEL
+labelTopics(mystm, topics=1:kno)
+
+#regress 회기분석
+myresult <- estimateEffect(c(1:kno) ~ year + mPass, mystm,  myout$meta)
+summary(myresult)
+
+#s: 스무딩 곡선으로 추정 
+myresult <- estimateEffect(c(1:kno) ~ s(year) +mPass, mystm, myout$meta)
+summary(myresult)
+
+colMeans(mystm[["theta"]])
+
+#그림, 토픽 순위
+par(mfrow=c(1,1))
+plot(mystm, type = "summary", text.cex = 1)
+
+#두 토픽 비교 
+plot(mystm, type = "perspectives", topics = c(7,2))
+
+#지정된 변수에 따른 시각화 (시간에도 활용 가능)
+topic.count <-kno
+mystm.labels <- labelTopics(mystm, topics=1:kno)
+
+par(mfrow=c(3,4))
+
+for (i in seq_along(sample(1:topic.count, size = kno))){
+  plot(myresult, "mPass", method="continuous",topics = i, main = paste0(mystm.labels$prob[i,1:7], collapse = ", "),
+       printlegend = F)
+}
+
+#상관관계
+par(mfrow=c(1,1))
+cor = topicCorr(mystm, method = c("simple", "huge"), cutoff =0.01) 
+plot(cor)
